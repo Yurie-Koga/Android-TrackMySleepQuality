@@ -17,10 +17,7 @@
 package com.example.android.trackmysleepquality.sleeptracker
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Transformations
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import com.example.android.trackmysleepquality.database.SleepDatabaseDao
 import com.example.android.trackmysleepquality.database.SleepNight
 import com.example.android.trackmysleepquality.formatNights
@@ -38,6 +35,25 @@ class SleepTrackerViewModel(val database: SleepDatabaseDao, application: Applica
                 formatNights(nights, application.resources)
         }
 
+        private val _navigateToSleepQuality = MutableLiveData<SleepNight>()
+        val navigateToSleepQuality: LiveData<SleepNight>
+                get() = _navigateToSleepQuality
+
+        val startButtonVisible = Transformations.map(tonight) {
+                it == null
+        }
+        val stopButtonVisible = Transformations.map(tonight) {
+                it != null
+        }
+        val clearButtonVisible = Transformations.map(nights) {
+                it?.isNotEmpty()
+        }
+
+        private var _showSnackbarEvent = MutableLiveData<Boolean>()
+        val showSnackBarEvent: LiveData<Boolean>
+                get() = _showSnackbarEvent
+
+
         init {
                 initializeTonight()
         }
@@ -48,14 +64,7 @@ class SleepTrackerViewModel(val database: SleepDatabaseDao, application: Applica
                 }
         }
 
-        private suspend fun getTonightFromDataBase(): SleepNight? {
-                var night = database.getTonight()
-                if (night?.endTimeMilli != night?.startTimeMilli) {
-                        night = null
-                }
-                return night
-        }
-
+        /** Methods for buttons presses **/
         fun onStartTracking() {
                 viewModelScope.launch {
                         val newNight = SleepNight()
@@ -64,20 +73,13 @@ class SleepTrackerViewModel(val database: SleepDatabaseDao, application: Applica
                 }
         }
 
-        private suspend fun insert(night: SleepNight) {
-                database.insert(night)
-        }
-
         fun onStopTracking() {
                 viewModelScope.launch {
                         val oldNight = tonight.value ?: return@launch
                         oldNight.endTimeMilli = System.currentTimeMillis()
                         update(oldNight)
+                        _navigateToSleepQuality.value = oldNight
                 }
-        }
-
-        private suspend fun update(night: SleepNight) {
-                database.update(night)
         }
 
         fun onClear() {
@@ -87,8 +89,36 @@ class SleepTrackerViewModel(val database: SleepDatabaseDao, application: Applica
                 }
         }
 
+
+        /** Methods for updating UI **/
+        fun doneNavigating() {
+                _navigateToSleepQuality.value = null
+        }
+
+        fun doneShowingSnackbar() {
+                _showSnackbarEvent.value = false
+        }
+
+
+        /** Methods for Database **/
+        private suspend fun getTonightFromDataBase(): SleepNight? {
+                var night = database.getTonight()
+                if (night?.endTimeMilli != night?.startTimeMilli) {
+                        night = null
+                }
+                return night
+        }
+
+        private suspend fun insert(night: SleepNight) {
+                database.insert(night)
+        }
+        private suspend fun update(night: SleepNight) {
+                database.update(night)
+        }
+
         private suspend fun clear() {
                 database.clear()
+                _showSnackbarEvent.value = true
         }
 }
 
